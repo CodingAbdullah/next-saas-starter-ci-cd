@@ -24,6 +24,15 @@ This is a starter template for building a SaaS application using **Next.js** wit
 - **Payments**: [Stripe](https://stripe.com/)
 - **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
 
+## CI/CD Stack
+- **Jenkins**: Creating a pipeline that handles all stages of testing and deployment
+- **SonarQube**: Testing tool used to report on code quality
+- **Docker**: For effective containerization
+- **Selenium/Cucumber**: Testing tools for BDD of the application
+- **Jest**: Testing for JS applications (unit tests)
+
+And much more maybe added here later.
+
 ## Getting Started
 
 ```bash
