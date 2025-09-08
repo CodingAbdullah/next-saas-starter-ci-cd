@@ -4,7 +4,6 @@ import { promisify } from 'node:util';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import os from 'node:os';
 
 const execAsync = promisify(exec);
 
@@ -22,63 +21,8 @@ function question(query: string): Promise<string> {
   );
 }
 
-async function checkStripeCLI() {
-  console.log(
-    'Step 1: Checking if Stripe CLI is installed and authenticated...'
-  );
-  try {
-    await execAsync('stripe --version');
-    console.log('Stripe CLI is installed.');
-
-    // Check if Stripe CLI is authenticated
-    try {
-      await execAsync('stripe config --list');
-      console.log('Stripe CLI is authenticated.');
-    } catch (error) {
-      console.log(
-        'Stripe CLI is not authenticated or the authentication has expired.'
-      );
-      console.log('Please run: stripe login');
-      const answer = await question(
-        'Have you completed the authentication? (y/n): '
-      );
-      if (answer.toLowerCase() !== 'y') {
-        console.log(
-          'Please authenticate with Stripe CLI and run this script again.'
-        );
-        process.exit(1);
-      }
-
-      // Verify authentication after user confirms login
-      try {
-        await execAsync('stripe config --list');
-        console.log('Stripe CLI authentication confirmed.');
-      } catch (error) {
-        console.error(
-          'Failed to verify Stripe CLI authentication. Please try again.'
-        );
-        process.exit(1);
-      }
-    }
-  } catch (error) {
-    console.error(
-      'Stripe CLI is not installed. Please install it and try again.'
-    );
-    console.log('To install Stripe CLI, follow these steps:');
-    console.log('1. Visit: https://docs.stripe.com/stripe-cli');
-    console.log(
-      '2. Download and install the Stripe CLI for your operating system'
-    );
-    console.log('3. After installation, run: stripe login');
-    console.log(
-      'After installation and authentication, please run this setup script again.'
-    );
-    process.exit(1);
-  }
-}
-
 async function getPostgresURL(): Promise<string> {
-  console.log('Step 2: Setting up Postgres');
+  console.log('Step 1: Setting up Postgres');
   const dbChoice = await question(
     'Do you want to use a local Postgres instance with Docker (L) or a remote Postgres instance (R)? (L/R): '
   );
@@ -147,45 +91,29 @@ volumes:
   }
 }
 
-async function getStripeSecretKey(): Promise<string> {
-  console.log('Step 3: Getting Stripe Secret Key');
-  console.log(
-    'You can find your Stripe Secret Key at: https://dashboard.stripe.com/test/apikeys'
-  );
-  return await question('Enter your Stripe Secret Key: ');
-}
-
-async function createStripeWebhook(): Promise<string> {
-  console.log('Step 4: Creating Stripe webhook...');
-  try {
-    const { stdout } = await execAsync('stripe listen --print-secret');
-    const match = stdout.match(/whsec_[a-zA-Z0-9]+/);
-    if (!match) {
-      throw new Error('Failed to extract Stripe webhook secret');
-    }
-    console.log('Stripe webhook created.');
-    return match[0];
-  } catch (error) {
-    console.error(
-      'Failed to create Stripe webhook. Check your Stripe CLI installation and permissions.'
-    );
-    if (os.platform() === 'win32') {
-      console.log(
-        'Note: On Windows, you may need to run this script as an administrator.'
-      );
-    }
-    throw error;
-  }
-}
-
 function generateAuthSecret(): string {
-  console.log('Step 5: Generating AUTH_SECRET...');
+  console.log('Step 2: Generating AUTH_SECRET...');
   return crypto.randomBytes(32).toString('hex');
 }
 
+async function getClerkKeys(): Promise<{ publishableKey: string; secretKey: string }> {
+  console.log('Step 3: Clerk.js Configuration');
+  console.log('You can find your keys at: https://dashboard.clerk.com/');
+  const publishableKey = await question('Enter your Clerk Publishable Key (pk_test_...): ');
+  const secretKey = await question('Enter your Clerk Secret Key (sk_test_...): ');
+  return { publishableKey, secretKey };
+}
+
+async function getPolarAccessToken(): Promise<string> {
+  console.log('Step 4: Polar.sh Access Token');
+  console.log('You can find your access token at: https://polar.sh/settings');
+  return await question('Enter your Polar.sh Access Token (optional, leave blank to skip): ');
+}
+
 async function writeEnvFile(envVars: Record<string, string>) {
-  console.log('Step 6: Writing environment variables to .env');
+  console.log('Step 5: Writing environment variables to .env');
   const envContent = Object.entries(envVars)
+    .filter(([_, value]) => value !== '') // Filter out empty values
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
 
@@ -194,23 +122,42 @@ async function writeEnvFile(envVars: Record<string, string>) {
 }
 
 async function main() {
-  await checkStripeCLI();
+  console.log('🚀 Next.js SaaS Starter Setup\n');
 
   const POSTGRES_URL = await getPostgresURL();
-  const STRIPE_SECRET_KEY = await getStripeSecretKey();
-  const STRIPE_WEBHOOK_SECRET = await createStripeWebhook();
-  const BASE_URL = 'http://localhost:3000';
   const AUTH_SECRET = generateAuthSecret();
+  const clerkKeys = await getClerkKeys();
+  const POLAR_ACCESS_TOKEN = await getPolarAccessToken();
+  const BASE_URL = 'http://localhost:3000';
 
-  await writeEnvFile({
+  const envVars: Record<string, string> = {
     POSTGRES_URL,
-    STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET,
     BASE_URL,
-    AUTH_SECRET,
-  });
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: clerkKeys.publishableKey,
+    CLERK_SECRET_KEY: clerkKeys.secretKey,
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL: '/sign-in',
+    NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/sign-up',
+    NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: '/dashboard',
+    NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: '/dashboard',
+  };
 
-  console.log('🎉 Setup completed successfully!');
+  if (POLAR_ACCESS_TOKEN.trim()) {
+    envVars.POLAR_ACCESS_TOKEN = POLAR_ACCESS_TOKEN;
+  }
+
+  await writeEnvFile(envVars);
+
+  console.log('\n🎉 Setup completed successfully!');
+  console.log('Next steps:');
+  console.log('1. Run `npm run db:migrate` to set up your database');
+  console.log('2. Run `npm run db:seed` to add sample data');
+  console.log('3. Set up Clerk webhook endpoint (optional)');
+  if (!POLAR_ACCESS_TOKEN.trim()) {
+    console.log('4. Add your Polar.sh access token to .env when ready');
+    console.log('5. Run `npm run dev` to start your development server');
+  } else {
+    console.log('4. Run `npm run dev` to start your development server');
+  }
 }
 
 main().catch(console.error);

@@ -1,49 +1,49 @@
-import { checkoutAction } from '@/lib/payments/actions';
 import { Check } from 'lucide-react';
-import { getStripePrices, getStripeProducts } from '@/lib/payments/stripe';
+import { checkoutAction } from '@/lib/payments/actions';
 import { SubmitButton } from './submit-button';
 
-// Prices are fresh for one hour max
-export const revalidate = 3600;
+// Replace these with your actual Polar.sh product IDs from your dashboard
+const POLAR_PRODUCT_IDS = {
+  base: 'product_base_plan', // Replace with actual Polar.sh product ID
+  plus: 'product_plus_plan', // Replace with actual Polar.sh product ID
+};
 
-export default async function PricingPage() {
-  const [prices, products] = await Promise.all([
-    getStripePrices(),
-    getStripeProducts(),
-  ]);
-
-  const basePlan = products.find((product) => product.name === 'Base');
-  const plusPlan = products.find((product) => product.name === 'Plus');
-
-  const basePrice = prices.find((price) => price.productId === basePlan?.id);
-  const plusPrice = prices.find((price) => price.productId === plusPlan?.id);
-
+export default function PricingPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          Choose Your Plan
+        </h1>
+        <p className="text-xl text-gray-600">
+          Simple pricing for teams of all sizes
+        </p>
+      </div>
+      
       <div className="grid md:grid-cols-2 gap-8 max-w-xl mx-auto">
         <PricingCard
-          name={basePlan?.name || 'Base'}
-          price={basePrice?.unitAmount || 800}
-          interval={basePrice?.interval || 'month'}
-          trialDays={basePrice?.trialPeriodDays || 7}
+          name="Base"
+          price={8}
+          interval="month"
+          trialDays={14}
           features={[
             'Unlimited Usage',
             'Unlimited Workspace Members',
             'Email Support',
           ]}
-          priceId={basePrice?.id}
+          productId={POLAR_PRODUCT_IDS.base}
         />
         <PricingCard
-          name={plusPlan?.name || 'Plus'}
-          price={plusPrice?.unitAmount || 1200}
-          interval={plusPrice?.interval || 'month'}
-          trialDays={plusPrice?.trialPeriodDays || 7}
+          name="Plus"
+          price={12}
+          interval="month"
+          trialDays={14}
           features={[
             'Everything in Base, and:',
             'Early Access to New Features',
             '24/7 Support + Slack Access',
           ]}
-          priceId={plusPrice?.id}
+          productId={POLAR_PRODUCT_IDS.plus}
         />
       </div>
     </main>
@@ -56,23 +56,23 @@ function PricingCard({
   interval,
   trialDays,
   features,
-  priceId,
+  productId,
 }: {
   name: string;
   price: number;
   interval: string;
   trialDays: number;
   features: string[];
-  priceId?: string;
+  productId: string;
 }) {
   return (
-    <div className="pt-6">
+    <div className="pt-6 border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
       <h2 className="text-2xl font-medium text-gray-900 mb-2">{name}</h2>
       <p className="text-sm text-gray-600 mb-4">
         with {trialDays} day free trial
       </p>
       <p className="text-4xl font-medium text-gray-900 mb-6">
-        ${price / 100}{' '}
+        ${price}{' '}
         <span className="text-xl font-normal text-gray-600">
           per user / {interval}
         </span>
@@ -86,7 +86,7 @@ function PricingCard({
         ))}
       </ul>
       <form action={checkoutAction}>
-        <input type="hidden" name="priceId" value={priceId} />
+        <input type="hidden" name="productId" value={productId} />
         <SubmitButton />
       </form>
     </div>
